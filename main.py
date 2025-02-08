@@ -13,6 +13,76 @@ import io
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def extract_code_from_response(response_text: str) -> str:
+    """Extract Python code from Claude's response."""
+    # Look for code between triple backticks
+    code_pattern = r"```python\n(.*?)```"
+    matches = re.findall(code_pattern, response_text, re.DOTALL)
+    
+    if matches:
+        return matches[0].strip()
+    
+    # If no code blocks found, try to extract just Python-like content
+    code_lines = []
+    for line in response_text.split('\n'):
+        if (line.strip().startswith('def ') or 
+            line.strip().startswith('import ') or 
+            line.strip().startswith('from ') or
+            line.strip().startswith('class ')):
+            code_lines.append(line)
+            
+    return '\n'.join(code_lines) if code_lines else get_default_cleaning_module()
+
+def get_default_cleaning_module() -> str:
+    """Return a default cleaning module when code generation fails."""
+    return '''
+import pandas as pd
+import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
+
+def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Default cleaning operations when custom cleaning fails.
+    
+    Args:
+        df (pd.DataFrame): Input DataFrame to clean
+        
+    Returns:
+        pd.DataFrame: Cleaned DataFrame
+    """
+    try:
+        # Create a copy of the DataFrame
+        cleaned_df = df.copy()
+        
+        # Basic cleaning operations
+        for column in cleaned_df.columns:
+            # Handle string columns
+            if cleaned_df[column].dtype == 'object':
+                # Strip whitespace
+                if cleaned_df[column].dtype == 'object':
+                    cleaned_df[column] = cleaned_df[column].str.strip()
+                
+                # Convert to lowercase
+                cleaned_df[column] = cleaned_df[column].str.lower()
+                
+            # Handle numeric columns
+            elif pd.api.types.is_numeric_dtype(cleaned_df[column]):
+                # Replace infinite values with NaN
+                cleaned_df[column] = cleaned_df[column].replace([np.inf, -np.inf], np.nan)
+                
+                # Fill NaN with median for numeric columns
+                median_value = cleaned_df[column].median()
+                cleaned_df[column] = cleaned_df[column].fillna(median_value)
+        
+        logger.info("Applied default cleaning operations successfully")
+        return cleaned_df
+        
+    except Exception as e:
+        logger.error(f"Error in default cleaning: {e}")
+        return df  # Return original DataFrame if cleaning fails
+'''
+
 def initialize_session_state():
     """Initialize Streamlit session state variables."""
     defaults = {
@@ -231,7 +301,8 @@ def process_current_file():
                     f"📥 Download {output_filename}",
                     content,
                     output_filename,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key=f"download_processed_{filename}"  # Added unique key
                 )
                 
             except Exception as error:
@@ -300,7 +371,8 @@ def main():
                 f"📥 Download {file_info['output_filename']}",
                 file_info['content'],
                 file_info['output_filename'],
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key=f"download_all_{filename}"  # Added unique key
             )
     
     # Reset button
