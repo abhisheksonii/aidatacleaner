@@ -2,11 +2,14 @@
 # exit on error
 set -o errexit
 
-# Install dependencies
+# Create uploads directory if it doesn't exist
+mkdir -p uploads
+chmod -R 755 uploads
+
+# Install Python dependencies
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 
-# Create necessary directories
-mkdir -p uploads
-
-# Set proper permissions
-chmod -R 755 uploads
+# Create instance directory for Flask
+mkdir -p instance
+chmod -R 755 instance
