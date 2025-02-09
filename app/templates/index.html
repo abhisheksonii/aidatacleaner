@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="main-container">
+    <div class="upload-section">
+        <h2>Upload Files</h2>
+        <div class="file-upload">
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+            <button onclick="uploadFiles()" class="btn btn-primary">Upload</button>
+        </div>
+    </div>
+    
+    <div id="processingSection" class="processing-section" style="display: none;">
+        <h2>Process File</h2>
+        <div id="preview" class="preview-section"></div>
+        <div class="instructions-section">
+            <textarea id="instructions" placeholder="Enter cleaning instructions..."></textarea>
+            <button onclick="processFile()" class="btn btn-primary">Process</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentFile = null;
+    
+    function displayPreview(data) {
+        const previewDiv = document.getElementById('preview');
+        
+        // Create preview table
+        let table = '<table class="preview-table">';
+        
+        // Add headers with data types
+        table += '<tr>';
+        data.columns.forEach(col => {
+            table += `<th>${col}<br><small>(${data.dtypes[col]})</small></th>`;
+        });
+        table += '</tr>';
+        
+        // Add data rows
+        const numRows = Object.values(data.preview)[0] ? Object.keys(Object.values(data.preview)[0]).length : 0;
+        
+        for (let i = 0; i < numRows; i++) {
+            table += '<tr>';
+            data.columns.forEach(col => {
+                const value = data.preview[col][i.toString()];
+                table += `<td>${value === null ? '' : value}</td>`;
+            });
+            table += '</tr>';
+        }
+        
+        table += '</table>';
+        previewDiv.innerHTML = table;
+    }
+    
+    async function uploadFiles() {
+        const fileInput = document.getElementById('fileInput');
+        const files = fileInput.files;
+        
+        if (files.length === 0) {
+            alert('Please select files to upload');
+            return;
+        }
+        
+        // Show loading state
+        const previewDiv = document.getElementById('preview');
+        previewDiv.innerHTML = '<div class="loading">Loading preview...</div>';
+        
+        const formData = new FormData();
+        formData.append('file', files[0]);
+        
+        try {
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+            
+            let data;
+            const contentType = response.headers.get('content-type');
+            
+            if (!response.ok) {
+                if (contentType && contentType.includes('application/json')) {
+                    data = await response.json();
+                    throw new Error(data.error || 'Upload failed');
+                } else {
+                    throw new Error('Upload failed');
+                }
+            }
+    
+            data = await response.json();
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            currentFile = files[0];
+            displayPreview(data);
+            document.getElementById('processingSection').style.display = 'block';
+        } catch (error) {
+            console.error('Upload error:', error);
+            alert('Error uploading file: ' + error.message);
+            previewDiv.innerHTML = '<div class="error">Error loading preview: ' + error.message + '</div>';
+        }
+    }
+    
+    async function processFile() {
+        if (!currentFile) {
+            alert('Please upload a file first');
+            return;
+        }
+    
+        const instructions = document.getElementById('instructions').value;
+        if (!instructions.trim()) {
+            alert('Please enter cleaning instructions');
+            return;
+        }
+    
+        const formData = new FormData();
+        formData.append('file', currentFile);
+        formData.append('instructions', instructions);
+    
+        // Show processing state
+        const processingSection = document.getElementById('processingSection');
+        processingSection.style.opacity = '0.5';
+        
+        try {
+            const response = await fetch('/process', {
+                method: 'POST',
+                body: formData
+            });
+    
+            if (!response.ok) {
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await response.json();
+                    throw new Error(data.error || 'Processing failed');
+                } else {
+                    throw new Error('Processing failed');
+                }
+            }
+    
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `cleaned_${currentFile.name.split('.')[0]}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            alert('File processed successfully!');
+        } catch (error) {
+            console.error('Processing error:', error);
+            alert('Error processing file: ' + error.message);
+        } finally {
+            processingSection.style.opacity = '1';
+        }
+    }
+    </script>
+{% endblock %}

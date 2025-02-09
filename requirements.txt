@@ -4,3 +4,8 @@ numpy
 anthropic
 openpyxl
 requests
+Flask
+Flask-Login
+Werkzeug
+python-dotenv
+gunicorn
