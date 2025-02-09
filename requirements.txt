@@ -1,11 +1,8 @@
-streamlit
+Flask
+gunicorn
+python-dotenv
+anthropic
+flask-login
 pandas
 numpy
-anthropic
 openpyxl
-requests
-Flask
-Flask-Login
-Werkzeug
-python-dotenv
-gunicorn
